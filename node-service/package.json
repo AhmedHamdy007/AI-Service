@@ -1,0 +1,32 @@
+{
+  "name": "ai-microservice",
+  "version": "1.0.0",
+  "description": "AI microservice for salon platform — face shape, hairstyle recommendations, chat",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "express-async-errors": "^3.1.1",
+    "multer": "^1.4.5-lts.1",
+    "ollama": "^0.5.9"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3",
+    "eslint": "^8.55.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

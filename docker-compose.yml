@@ -1,0 +1,78 @@
+version: "3.9"
+
+services:
+
+  # ── Node.js AI Microservice ──────────────────────────────────────────────
+  ai-service:
+    build:
+      context: ./node-service
+    container_name: ai-service
+    ports:
+      - "3001:3001"
+    environment:
+      PORT:                 3001
+      PYTHON_SIDECAR_URL:   http://python-sidecar:8001
+      OLLAMA_HOST:          http://ollama:11434
+      OLLAMA_MODEL:         llama3.2
+    depends_on:
+      - python-sidecar
+      - ollama
+    restart: unless-stopped
+    networks:
+      - ai-net
+
+  # ── Python UniFace Sidecar ───────────────────────────────────────────────
+  python-sidecar:
+    build:
+      context: ./python-sidecar
+    container_name: python-sidecar
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+    networks:
+      - ai-net
+    # UniFace model cache — persists between container restarts
+    volumes:
+      - uniface-models:/root/.uniface
+
+  # ── Ollama (local LLM) ───────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+    networks:
+      - ai-net
+    # Uncomment if you have an NVIDIA GPU:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # ── Model Puller (runs once to download llama3.2) ────────────────────────
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: ollama-pull
+    depends_on:
+      - ollama
+    networks:
+      - ai-net
+    volumes:
+      - ollama-data:/root/.ollama
+    entrypoint: >
+      sh -c "sleep 5 && ollama pull llama3.2"
+    restart: "no"
+
+networks:
+  ai-net:
+    driver: bridge
+
+volumes:
+  uniface-models:
+  ollama-data:
