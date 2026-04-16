@@ -50,7 +50,7 @@ Search for hair care products based on user attributes.
     }
   ],
   "count": 6,
-  "source": "local-knowledge-base",  // or "api-integration", "amazon-api", etc.
+  "source": "expert-recommendations",  // or "api-integration", "amazon-api", etc.
   "cached": false,
   "request_id": "uuid"
 }
@@ -188,13 +188,19 @@ Get current cache statistics for monitoring.
 {
   "success": true,
   "data": {
-    "size": 3,
-    "items": [
+    "parsedResults": 3,
+    "cachedKeys": [
       "products:curly:frizz:20-40",
       "products:wavy:dryness:under-20",
       "filter-options"
     ],
-    "totalSize": 3
+    "sourceCacheStats": {
+      "size": 2,
+      "items": [
+        "recommendation:Allure:curly hair products",
+        "recommendation:Byrdie:curly hair products"
+      ]
+    }
   },
   "request_id": "uuid"
 }

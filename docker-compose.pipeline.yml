@@ -1,0 +1,8 @@
+services:
+  api-gateway:
+    build:
+      context: ../api-gateway
+
+  auth-service:
+    build:
+      context: ../auth-service
