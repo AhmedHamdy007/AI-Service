@@ -5,7 +5,7 @@
 
 /**
  * Extract brand name from product name
- * Example: "Cantu Shea Butter Leave-In Conditioner" → "Cantu"
+ * Example: "Cantu Shea Butter Leave-In Conditioner" -> "Cantu"
  */
 function extractBrand(productName) {
   const brands = [
@@ -16,8 +16,8 @@ function extractBrand(productName) {
     "OuAI",
     "Brazilian Blowout",
     "Olaplex",
-    "Kérastase",
-    "TRESemmé",
+    "Kerastase",
+    "TRESemme",
     "Pantene",
     "Bumble and bumble",
     "Coppola",
@@ -26,25 +26,27 @@ function extractBrand(productName) {
     "Byrdie",
   ];
 
+  if (!productName || typeof productName !== "string") return "Unknown";
+
   for (const brand of brands) {
     if (productName.toLowerCase().includes(brand.toLowerCase())) {
       return brand;
     }
   }
 
-  // Extract first 1-2 words if no known brand found
   const words = productName.split(" ");
-  return words[0];
+  return words[0] || "Unknown";
 }
 
 /**
  * Estimate price from text
- * Example: "$28.00", "about $30" → 28, 30
+ * Example: "$28.00", "about $30" -> 28, 30
  */
 function estimatePrice(priceText) {
   if (!priceText) return null;
+  if (typeof priceText === "number") return priceText;
 
-  const match = priceText.match(/\$(\d+(?:\.\d{2})?)/);
+  const match = String(priceText).match(/\$(\d+(?:\.\d{2})?)/);
   if (match) {
     return parseFloat(match[1]);
   }
@@ -65,41 +67,50 @@ function getBudgetCategory(price) {
 
 /**
  * Assign credibility rating based on source
+ * Uses 0-10 scale for source credibility.
  */
 function getCredibilityRating(credibilityScore) {
-  if (credibilityScore >= 90) return 5;
-  if (credibilityScore >= 75) return 4.5;
-  if (credibilityScore >= 60) return 4;
-  return 3.5;
+  if (!credibilityScore) return 3.5;
+  if (credibilityScore >= 9) return 5;
+  if (credibilityScore >= 8) return 4.5;
+  if (credibilityScore >= 7) return 4;
+  if (credibilityScore >= 6) return 3.5;
+  return 3;
 }
 
 /**
  * Parse scraped recommendation into consistent format
  */
 function parseRecommendation(scrapedProduct) {
-  const brand = extractBrand(scrapedProduct.name);
+  const brand = scrapedProduct.brand || extractBrand(scrapedProduct.name);
   const price = estimatePrice(scrapedProduct.price);
+  const productUrl = scrapedProduct.productUrl || scrapedProduct.url || null;
+  const sourceUrl = scrapedProduct.sourceUrl || scrapedProduct.pageUrl || null;
+  const credibilityScore = scrapedProduct.credibilityScore || scrapedProduct.sourceCredibility;
 
   return {
     id: scrapedProduct.name
-      .toLowerCase()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-z0-9-]/g, ""),
-    name: scrapedProduct.name,
+      ? scrapedProduct.name
+          .toLowerCase()
+          .replace(/\s+/g, "-")
+          .replace(/[^a-z0-9-]/g, "")
+      : "unknown",
+    name: scrapedProduct.name || "Unknown",
     brand,
     price: price || null,
-    priceFormatted: scrapedProduct.price || "Price not listed",
-    rating: getCredibilityRating(scrapedProduct.credibilityScore),
-    image: null, // Could extract from source later
-    description: scrapedProduct.description || scrapedProduct.name,
+    priceFormatted: scrapedProduct.priceFormatted || scrapedProduct.price || "Price not listed",
+    rating: scrapedProduct.rating || getCredibilityRating(credibilityScore),
+    image: scrapedProduct.image || null,
+    description: scrapedProduct.description || scrapedProduct.name || "",
     hairTypes: inferHairTypes(scrapedProduct.category),
     concerns: inferConcerns(scrapedProduct.category),
     budgetCategory: getBudgetCategory(price),
-    website: extractWebsite(scrapedProduct.productUrl),
-    productUrl: scrapedProduct.productUrl,
-    source: scrapedProduct.source,
-    sourceUrl: scrapedProduct.sourceUrl,
-    credibilityScore: scrapedProduct.credibilityScore,
+    website: extractWebsite(productUrl),
+    productUrl,
+    source: scrapedProduct.source || "unknown",
+    sourceUrl,
+    credibilityScore,
+    ratingCount: scrapedProduct.ratingCount || 0,
   };
 }
 
@@ -107,13 +118,17 @@ function parseRecommendation(scrapedProduct) {
  * Infer hair types from category
  */
 function inferHairTypes(category) {
+  if (!category) return ["all"];
+
   const categoryMap = {
     curly: ["curly", "wavy", "coily"],
-    "curly-community": ["curly", "coily"],
+    "curly-hair": ["curly", "coily"],
     frizz: ["all"],
     damage: ["all"],
     volume: ["fine", "straight", "thin"],
     "general-care": ["all"],
+    general: ["all"],
+    "hair-specific": ["all"],
   };
 
   return categoryMap[category] || ["all"];
@@ -123,13 +138,17 @@ function inferHairTypes(category) {
  * Infer concerns from category
  */
 function inferConcerns(category) {
+  if (!category) return ["general"];
+
   const categoryMap = {
-    curly: ["definition", "frizz"],
-    "curly-community": ["definition", "frizz", "dryness"],
+    curly: ["lack-of-definition", "frizz"],
+    "curly-hair": ["lack-of-definition", "frizz", "dryness"],
     frizz: ["frizz"],
     damage: ["damage", "breakage"],
     volume: ["lack-of-volume", "limp"],
     "general-care": ["dryness", "shine"],
+    general: ["general"],
+    "hair-specific": ["general"],
   };
 
   return categoryMap[category] || ["general"];
@@ -155,22 +174,21 @@ function extractWebsite(productUrl) {
 function scoreProduct(product, userProfile) {
   let score = 0;
 
-  // High credibility score boost
-  if (product.credibilityScore >= 90) score += 40;
-  else if (product.credibilityScore >= 75) score += 30;
+  if (product.credibilityScore >= 9) score += 40;
+  else if (product.credibilityScore >= 8) score += 30;
+  else if (product.credibilityScore >= 7) score += 25;
   else score += 20;
 
-  // Hair type match
   if (userProfile.hairType && product.hairTypes) {
-    if (
-      product.hairTypes.includes("all") ||
-      product.hairTypes.includes(userProfile.hairType)
-    ) {
+    const hairTypes = Array.isArray(userProfile.hairType)
+      ? userProfile.hairType
+      : [userProfile.hairType];
+
+    if (product.hairTypes.includes("all") || hairTypes.some((t) => product.hairTypes.includes(t))) {
       score += 35;
     }
   }
 
-  // Concern match
   if (userProfile.concerns && product.concerns) {
     const matchedConcerns = userProfile.concerns.filter((c) =>
       product.concerns.includes(c)
@@ -178,7 +196,6 @@ function scoreProduct(product, userProfile) {
     score += matchedConcerns.length * 20;
   }
 
-  // Budget match
   if (
     userProfile.budgetCategory &&
     product.budgetCategory === userProfile.budgetCategory
@@ -186,7 +203,6 @@ function scoreProduct(product, userProfile) {
     score += 15;
   }
 
-  // Price preference
   if (userProfile.maxPrice && product.price && product.price <= userProfile.maxPrice) {
     score += 10;
   }
@@ -198,10 +214,8 @@ function scoreProduct(product, userProfile) {
  * Filter and rank products
  */
 function filterAndRankProducts(scrapedProducts, userProfile, limit = 6) {
-  // Parse all scraped products
   const parsed = scrapedProducts.map(parseRecommendation);
 
-  // Remove duplicates by name
   const seen = new Map();
   const unique = [];
 
@@ -211,7 +225,6 @@ function filterAndRankProducts(scrapedProducts, userProfile, limit = 6) {
       seen.set(normalizedName, product);
       unique.push(product);
     } else {
-      // Keep the one with higher credibility
       const existing = seen.get(normalizedName);
       if (product.credibilityScore > existing.credibilityScore) {
         const idx = unique.findIndex((p) => p.name === existing.name);
@@ -221,7 +234,6 @@ function filterAndRankProducts(scrapedProducts, userProfile, limit = 6) {
     }
   });
 
-  // Score and rank
   const scored = unique
     .map((product) => ({
       ...product,

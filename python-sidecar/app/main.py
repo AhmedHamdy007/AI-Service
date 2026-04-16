@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes import face
+from app.routes import products
 
 app = FastAPI(
     title="UniFace Sidecar",
@@ -16,6 +17,7 @@ app.add_middleware(
 )
 
 app.include_router(face.router, prefix="/face", tags=["Face Analysis"])
+app.include_router(products.router, prefix="/products", tags=["Products"])
 
 @app.get("/health")
 def health():

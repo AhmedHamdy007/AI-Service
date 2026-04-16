@@ -5,22 +5,20 @@
  * Provides expert-curated recommendations
  */
 
-const {
-  scrapeByHairType,
-  scrapeByConcern,
-  scrapeAll,
-  getCacheStats: getSourceCacheStats,
-  clearCache: clearSourceCache,
-} = require("./recommendationScraper");
+const axios = require("axios");
 
-const {
-  filterAndRankProducts,
-  parseRecommendation,
-} = require("./recommendationParser");
+const config = require("../config");
+
+const { filterAndRankProducts } = require("./recommendationParser");
+
+const http = axios.create({
+  baseURL: config.pythonSidecarUrl,
+  timeout: config.requestTimeout,
+});
 
 // Simple in-memory cache with TTL
 const cache = new Map();
-const CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours for parsed results
+const CACHE_TTL = 15 * 60 * 1000; // 15 minutes for parsed results
 
 /**
  * Get cached data or null if expired
@@ -47,11 +45,17 @@ function setCache(key, data) {
   });
 }
 
+function normalizeKeyPart(value) {
+  if (!value) return "all";
+  if (Array.isArray(value)) return value.join("|");
+  return String(value);
+}
+
 /**
  * Generate cache key from search params
  */
 function getCacheKey(hairType, concerns, budgetCategory) {
-  return `products:${hairType}:${concerns}:${budgetCategory}`;
+  return `products:${normalizeKeyPart(hairType)}:${normalizeKeyPart(concerns)}:${normalizeKeyPart(budgetCategory)}`;
 }
 
 /**
@@ -62,7 +66,6 @@ function getCacheKey(hairType, concerns, budgetCategory) {
 async function searchProducts({ hairType, concerns, budgetCategory, limit = 6 }) {
   const cacheKey = getCacheKey(hairType, concerns, budgetCategory);
 
-  // Check cache first
   const cached = getCached(cacheKey);
   if (cached) {
     return {
@@ -75,30 +78,14 @@ async function searchProducts({ hairType, concerns, budgetCategory, limit = 6 })
   try {
     let scrapedProducts = [];
 
-    // Scrape by hair type if provided
-    if (hairType) {
-      const hairTypeResults = await scrapeByHairType(hairType);
-      scrapedProducts = scrapedProducts.concat(hairTypeResults);
-    }
+    const response = await http.post("/products/recommendations", {
+      hairType,
+      concerns,
+      limit: Math.max(limit * 3, 20),
+    });
 
-    // Scrape by concern if provided
-    if (concerns) {
-      const concernArray = Array.isArray(concerns) ? concerns : [concerns];
-      for (const concern of concernArray) {
-        const concernResults = await scrapeByConcern(concern);
-        scrapedProducts = scrapedProducts.concat(concernResults);
-      }
-    }
+    scrapedProducts = response.data?.data || [];
 
-    // If no specific filters, scrape all sources
-    if (!hairType && !concerns) {
-      const allResults = await scrapeAll();
-      allResults.forEach((result) => {
-        scrapedProducts = scrapedProducts.concat(result.products);
-      });
-    }
-
-    // Filter, rank, and format products
     const userProfile = {
       hairType,
       concerns: Array.isArray(concerns) ? concerns : concerns ? [concerns] : [],
@@ -107,7 +94,6 @@ async function searchProducts({ hairType, concerns, budgetCategory, limit = 6 })
 
     const products = filterAndRankProducts(scrapedProducts, userProfile, limit);
 
-    // Cache the results
     setCache(cacheKey, products);
 
     return {
@@ -146,7 +132,7 @@ async function getAvailableFilters() {
         "breakage",
         "tangled",
         "limp",
-        "definition",
+        "lack-of-definition",
       ],
       budgetCategories: ["under-20", "20-40", "40-60", "60-plus"],
     };
@@ -163,7 +149,6 @@ async function getAvailableFilters() {
  */
 function clearCache() {
   cache.clear();
-  clearSourceCache();
 }
 
 /**
@@ -173,7 +158,7 @@ function getCacheStats() {
   return {
     parsedResults: cache.size,
     cachedKeys: Array.from(cache.keys()),
-    sourceCacheStats: getSourceCacheStats(),
+    sourceCacheStats: null,
   };
 }
 
@@ -182,64 +167,6 @@ module.exports = {
   getAvailableFilters,
   clearCache,
   getCacheStats,
-  // Exportable for advanced usage
-  getCached,
-  setCache,
-};
-
-/**
- * Example: Integration point for RapidAPI
- * Uncomment and configure to use real API
- */
-async function searchProductsViaRapidAPI({ hairType, concerns, budgetCategory, limit }) {
-  // const options = {
-  //   method: 'GET',
-  //   url: 'https://api.rapidapi.com/beauty/products',
-  //   params: {
-  //     hairType: hairType,
-  //     concern: concerns,
-  //     maxPrice: budgetCategory,
-  //     limit: limit
-  //   },
-  //   headers: {
-  //     'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
-  //     'X-RapidAPI-Host': 'api.rapidapi.com'
-  //   }
-  // };
-  //
-  // try {
-  //   const response = await axios.request(options);
-  //   return response.data;
-  // } catch (error) {
-  //   console.error('RapidAPI error:', error);
-  //   throw error;
-  // }
-}
-
-/**
- * Example: Integration point for Amazon PA-API
- * Requires AWS credentials
- */
-async function searchProductsViaAmazonAPI({ hairType, concerns, limit }) {
-  // Implementation would require:
-  // - AWS credentials
-  // - amazon-paapi package
-  // - Product Advertising API subscription
-  //
-  // Example structure:
-  // const results = await searchAmazonProducts({
-  //   keywords: `${hairType} hair ${concerns}`,
-  //   index: 'Beauty',
-  //   itemCount: limit
-  // });
-}
-
-module.exports = {
-  searchProducts,
-  getAvailableFilters,
-  clearCache,
-  getCacheStats,
-  // Exportable for advanced usage
   getCached,
   setCache,
 };
