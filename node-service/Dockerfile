@@ -1,37 +1,37 @@
-FROM node:20-alpine AS builder
-
-WORKDIR /build
-
-# Copy package files
-COPY package*.json ./
-
-# Install all dependencies (including dev dependencies) for building
-RUN npm install --prefer-offline --no-audit
-
-# Final stage
-FROM node:20-alpine
+# Stage 1: Dependencies
+FROM node:20.19-slim AS deps
 
 WORKDIR /app
 
-# Install dumb-init for proper signal handling (Microsoft best practice)
-RUN apk add --no-cache dumb-init
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
-# Copy node_modules from builder
-COPY --from=builder /build/node_modules ./node_modules
+# Stage 2: Production
+FROM node:20.19-slim AS production
 
-# Copy application code
-COPY . .
+WORKDIR /app
 
-# Create uploads directory if needed
-RUN mkdir -p uploads
+ENV NODE_ENV=production
+ENV PORT=3007
 
-# Non-root user for security (Microsoft best practice)
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nodejs -u 1001
-USER nodejs
+RUN addgroup --system appgroup && \
+    adduser --system --ingroup appgroup appuser
 
-EXPOSE 3001
+COPY --from=deps /app/node_modules ./node_modules
+COPY src/ ./src/
+COPY shared/http/ /shared/http/
+COPY package.json ./
 
-# Use dumb-init to handle signals properly
-ENTRYPOINT ["dumb-init", "--"]
+RUN mkdir -p uploads && chown -R appuser:appgroup uploads
+
+USER appuser
+
+EXPOSE 3007
+
+HEALTHCHECK --interval=30s \
+            --timeout=5s \
+            --start-period=15s \
+            --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3007/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))" || exit 1
+
 CMD ["node", "src/index.js"]

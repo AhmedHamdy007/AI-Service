@@ -16,14 +16,42 @@ const http = axios.create({
  */
 async function analyzeFace(imageBuffer, mimetype = "image/jpeg") {
   const form = new FormData();
-  form.append("file", imageBuffer, {
+  form.append("image", imageBuffer, {
     filename: "upload.jpg",
     contentType: mimetype,
   });
 
-  const response = await http.post("/face/analyze", form, {
+  const response = await http.post("/face-shape/analyze", form, {
     headers: form.getHeaders(),
-    // Model inference can be slow on cold start; use configured default timeout.
+    timeout: 30000,
+  });
+
+  const result = response.data;
+  return {
+    success: true,
+    data: {
+      face_shape: result.shape,
+      confidence: result.confidence,
+      method: result.method,
+      measurements: result.measurements || {},
+      all_scores: result.all_scores || {},
+      geometric_scores: result.geometric_scores || {},
+      face_detected: result.face_detected,
+      mock: false,
+    },
+  };
+}
+
+async function analyzeFaceShape(imageBuffer, mimetype = "image/jpeg") {
+  const form = new FormData();
+  form.append("image", imageBuffer, {
+    filename: "upload.jpg",
+    contentType: mimetype,
+  });
+
+  const response = await http.post("/face-shape/analyze", form, {
+    headers: form.getHeaders(),
+    timeout: 30000,
   });
 
   return response.data;
@@ -49,4 +77,4 @@ async function getSupportedShapes({ timeoutMs } = {}) {
   return response.data;
 }
 
-module.exports = { analyzeFace, checkSidecarHealth, getSupportedShapes };
+module.exports = { analyzeFace, analyzeFaceShape, checkSidecarHealth, getSupportedShapes };

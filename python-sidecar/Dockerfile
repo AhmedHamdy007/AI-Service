@@ -1,40 +1,51 @@
-FROM python:3.11-slim
+FROM python:3.11-slim AS deps
 
 WORKDIR /app
 
-# Install system dependencies for OpenCV and ML libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     libglib2.0-0 \
+    libgl1 \
     libsm6 \
     libxext6 \
-    libxrender-dev \
+    libxrender1 \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better layer caching
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip setuptools && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# Copy application code
-COPY . .
+FROM python:3.11-slim AS production
 
-# Create non-root user for security (Microsoft best practice)
-RUN useradd -m -u 1001 appuser && \
-    chown -R appuser:appuser /app
+WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 \
+    libgl1 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && addgroup --system appgroup \
+    && adduser --system --ingroup appgroup appuser
+
+COPY --from=deps /install /usr/local
+COPY app/ ./app/
+COPY models/ ./models/
+
+RUN chown -R appuser:appgroup /app
+
 USER appuser
-
-# Pre-download UniFace models at build time for faster startup
-# Use || true to continue if models already exist or on network issues
-RUN python -c "from uniface import RetinaFace; RetinaFace()" || true && \
-    python -c "from uniface.landmark import Landmark106; Landmark106()" || true
 
 EXPOSE 8001
 
-# Health check (Microsoft best practice)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')" || exit 1
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]

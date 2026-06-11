@@ -145,13 +145,6 @@ async function getAvailableFilters() {
 }
 
 /**
- * Clear cache (for testing or manual refresh)
- */
-function clearCache() {
-  cache.clear();
-}
-
-/**
  * Get cache stats (for monitoring)
  */
 function getCacheStats() {
@@ -165,7 +158,6 @@ function getCacheStats() {
 module.exports = {
   searchProducts,
   getAvailableFilters,
-  clearCache,
   getCacheStats,
   getCached,
   setCache,

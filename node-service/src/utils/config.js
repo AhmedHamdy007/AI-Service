@@ -5,15 +5,27 @@
 
 const logger = require("./logger").logger;
 
+function csvEnv(name) {
+  const value = process.env[name];
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 function validateConfig() {
   const config = {
     port: parseInt(process.env.PORT || "3001", 10),
     nodeEnv: process.env.NODE_ENV || "development",
     pythonSidecarUrl: process.env.PYTHON_SIDECAR_URL || "http://localhost:8001",
-    ollamaHost: process.env.OLLAMA_HOST || "http://localhost:11434",
-    ollamaModel: process.env.OLLAMA_MODEL || "llama3.2",
+    disableLlm: process.env.DISABLE_LLM === "true",
     logLevel: process.env.LOG_LEVEL || "INFO",
     requestTimeout: parseInt(process.env.REQUEST_TIMEOUT || "15000", 10),
+    corsAllowedOrigins: csvEnv("CORS_ALLOWED_ORIGINS"),
+    jwtPublicKeyPath: process.env.JWT_PUBLIC_KEY_PATH || "",
+    jwtIssuer: process.env.JWT_ISSUER || "salon-platform.auth",
+    jwtAudience: process.env.JWT_AUDIENCE || "salon-platform.api",
   };
 
   // Validate configuration
@@ -26,12 +38,6 @@ function validateConfig() {
   if (!config.pythonSidecarUrl.startsWith("http")) {
     errors.push(
       `Invalid PYTHON_SIDECAR_URL: ${config.pythonSidecarUrl} (must be HTTP/HTTPS)`
-    );
-  }
-
-  if (!config.ollamaHost.startsWith("http")) {
-    errors.push(
-      `Invalid OLLAMA_HOST: ${config.ollamaHost} (must be HTTP/HTTPS)`
     );
   }
 
@@ -52,7 +58,7 @@ function validateConfig() {
     port: config.port,
     nodeEnv: config.nodeEnv,
     pythonSidecarUrl: config.pythonSidecarUrl,
-    ollamaHost: config.ollamaHost,
+    disableLlm: config.disableLlm,
   });
 
   return config;

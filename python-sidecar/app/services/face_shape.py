@@ -97,13 +97,6 @@ def classify_face_shape(landmarks: list) -> dict:
         G(jaw_taper,       0.80, 0.12) * 0.40
     )
 
-    # DIAMOND — cheeks widest, forehead AND jaw both narrow
-    scores["Diamond"] = (
-        G(cheek_to_forehead, 1.20, 0.15) * 0.45 +
-        G(jaw_to_cheek,      0.80, 0.12) * 0.35 +
-        G(forehead_to_jaw,   0.90, 0.10) * 0.20
-    )
-
     # OVAL — balanced, moderate height, cheek slightly widest
     scores["Oval"] = (
         G(height_ratio,    1.35, 0.20) * 0.40 +

@@ -27,6 +27,14 @@ function errorHandler(err, req, res, next) {
     });
   }
 
+  if (err.status && err.message && /Chat/i.test(err.message)) {
+    return res.status(err.status).json({
+      success: false,
+      error: err.message,
+      request_id: requestId,
+    });
+  }
+
   // Axios errors from sidecar calls
   if (err.response) {
     logger?.warn("Upstream service error", {
@@ -78,7 +86,7 @@ function errorHandler(err, req, res, next) {
   if (err.code === "LIMIT_FILE_SIZE") {
     return res.status(400).json({
       success: false,
-      error: "File too large (max 10MB)",
+      error: "File too large (max 5MB)",
       field: "file",
       request_id: requestId,
     });

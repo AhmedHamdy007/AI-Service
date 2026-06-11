@@ -1,7 +1,7 @@
 const express  = require("express");
 const multer   = require("multer");
-const { analyzeFace, checkSidecarHealth, getSupportedShapes } = require("../services/sidecarClient");
-const { getRecommendations } = require("../services/recommendationEngine");
+const { analyzeFaceShape, checkSidecarHealth, getSupportedShapes } = require("../services/sidecarClient");
+const { getRecommendations } = require("../data/haircutData");
 const {
   validateImageFile,
   validateHairType,
@@ -13,7 +13,7 @@ const {
 const router  = express.Router();
 const upload  = multer({
   storage: multer.memoryStorage(),
-  limits:  { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits:  { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (!file.mimetype.startsWith("image/")) {
       return cb(new ValidationError("Only image files are allowed", "file"), false);
@@ -44,53 +44,47 @@ router.post("/analyze", upload.single("file"), async (req, res) => {
       fileName: req.file?.originalname,
     });
 
-    // 1. Detect face shape via Python sidecar
-    const faceResult = await analyzeFace(req.file.buffer, req.file.mimetype);
+    // 1. Detect face shape via the ConvNeXt classifier in the Python sidecar.
+    const faceResult = await analyzeFaceShape(req.file.buffer, req.file.mimetype);
 
-    if (!faceResult.success) {
-      return res.status(422).json({
-        success: false,
-        error: faceResult.detail || "Face analysis failed",
-        request_id: req.id,
-      });
-    }
-
-    const { face_shape, confidence, measurements, all_scores, mock } = faceResult.data;
-
-    // 2. Optionally run recommendations if attributes provided
+    // 2. Build structured haircut cards from the shared local knowledge base.
     const { hairType, gender, lifestyle } = req.body;
-    let recommendations = null;
+    if (hairType) validateHairType(hairType);
+    if (lifestyle) validateLifestyle(lifestyle);
 
-    if (hairType || gender || lifestyle) {
-      // Validate optional attributes
-      const validatedHairType = validateHairType(hairType);
-      const validatedGender = validateGender(gender);
-      const validatedLifestyle = validateLifestyle(lifestyle);
-
-      recommendations = getRecommendations({
-        faceShape: face_shape,
-        hairType: validatedHairType,
-        gender: validatedGender,
-        lifestyle: validatedLifestyle,
-        limit: 5,
-      });
-    }
+    const validatedGender = validateGender(gender) || "female";
+    const recommendations = faceResult.face_detected
+      ? getRecommendations(faceResult.shape, validatedGender, 3)
+      .map((cut) => ({
+        id: cut.id,
+        name: cut.name,
+        altName: cut.altName,
+        why: cut.why,
+        tags: cut.tags,
+        imageUrl: cut.imageUrl,
+      }))
+      : [];
 
     req.logger.info("Face analysis completed", {
       request_id: req.id,
-      faceShape: face_shape,
-      confidence,
+      faceShape: faceResult.shape,
+      confidence: faceResult.confidence,
     });
 
     res.json({
       success: true,
       data: {
-        faceShape:       face_shape,
-        confidence,
-        measurements,
-        allScores:       all_scores,
+        faceDetected:    faceResult.face_detected,
+        faceShape:       faceResult.shape,
+        shape:           faceResult.shape,
+        confidence:      faceResult.confidence,
+        method:          faceResult.method,
+        gender:          validatedGender,
+        measurements:    faceResult.measurements || {},
+        allScores:       faceResult.all_scores || {},
+        geometricScores: faceResult.geometric_scores || {},
         recommendations,
-        mock:            mock || false,
+        mock:            false,
       },
       request_id: req.id,
     });

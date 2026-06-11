@@ -158,8 +158,8 @@ function validateImageFile(file) {
     );
   }
 
-  if (file.size > 10 * 1024 * 1024) {
-    throw new ValidationError("File size exceeds 10MB limit", "file");
+  if (file.size > 5 * 1024 * 1024) {
+    throw new ValidationError("File size exceeds 5MB limit", "file");
   }
 
   return file;

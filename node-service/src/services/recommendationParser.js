@@ -46,7 +46,9 @@ function estimatePrice(priceText) {
   if (!priceText) return null;
   if (typeof priceText === "number") return priceText;
 
-  const match = String(priceText).match(/\$(\d+(?:\.\d{2})?)/);
+  const match = String(priceText)
+    .replace(/,/g, "")
+    .match(/(?:RM|MYR|£|\$|€)\s*(\d+(?:\.\d{1,2})?)/i);
   if (match) {
     return parseFloat(match[1]);
   }
@@ -125,8 +127,8 @@ function inferHairTypes(category) {
     "curly-hair": ["curly", "coily"],
     frizz: ["all"],
     damage: ["all"],
-    volume: ["fine", "straight", "thin"],
     "general-care": ["all"],
+    volume: ["fine", "straight", "thin"],
     general: ["all"],
     "hair-specific": ["all"],
   };
@@ -145,8 +147,8 @@ function inferConcerns(category) {
     "curly-hair": ["lack-of-definition", "frizz", "dryness"],
     frizz: ["frizz"],
     damage: ["damage", "breakage"],
+    "general-care": ["dryness", "damage", "lack-of-shine"],
     volume: ["lack-of-volume", "limp"],
-    "general-care": ["dryness", "shine"],
     general: ["general"],
     "hair-specific": ["general"],
   };

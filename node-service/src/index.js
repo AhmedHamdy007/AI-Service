@@ -6,18 +6,32 @@ const cors = require("cors");
 
 const { requestLoggingMiddleware, logger } = require("./utils/logger");
 const config = require("./config");
+const {
+  createCorsOptions,
+  securityHeadersMiddleware,
+} = require("../../../shared/http/httpSecurity");
 
 const faceRoutes = require("./routes/face.routes");
+const faceShapeRoutes = require("./routes/faceShape.routes");
 const recommendationRoutes = require("./routes/recommendation.routes");
 const chatRoutes = require("./routes/chat.routes");
 const productRoutes = require("./routes/products.routes");
+const { authenticate } = require("./middleware/authenticate");
+const { customerOnly } = require("./middleware/customerOnly");
 const errorHandler = require("./middleware/errorHandler");
 
 const app = express();
 const PORT = config.port;
+const corsOptions = createCorsOptions({
+  nodeEnv: config.nodeEnv,
+  corsAllowedOrigins: config.corsAllowedOrigins,
+  allowedMethods: ["GET", "POST"],
+});
 
 // Middleware
-app.use(cors());
+app.use(securityHeadersMiddleware);
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(requestLoggingMiddleware);
@@ -34,7 +48,7 @@ app.get("/health", (req, res) => {
 
 app.get("/ready", async (req, res) => {
   // Keep readiness deterministic and reasonably fast.
-  // We treat the python sidecar as required; Ollama may be optional per deployment.
+  // We treat the python sidecar as required; chat LLM calls are handled there.
   try {
     const { checkSidecarHealth } = require("./services/sidecarClient");
     await checkSidecarHealth({ timeoutMs: 1500 });
@@ -52,10 +66,12 @@ app.get("/ready", async (req, res) => {
   }
 });
 
-app.use("/api/face", faceRoutes);
-app.use("/api/recommendations", recommendationRoutes);
-app.use("/api/chat", chatRoutes);
-app.use("/api/products", productRoutes);
+app.use("/api/face", authenticate, customerOnly, faceRoutes);
+app.use("/api/face-shape", authenticate, customerOnly, faceShapeRoutes);
+app.use("/ai/face-shape", authenticate, customerOnly, faceShapeRoutes);
+app.use("/api/recommendations", authenticate, customerOnly, recommendationRoutes);
+app.use("/api/chat", authenticate, customerOnly, chatRoutes);
+app.use("/api/products", authenticate, customerOnly, productRoutes);
 
 // 404 handler
 app.use("*", (req, res) => {
@@ -75,14 +91,25 @@ const server = app.listen(PORT, () => {
     port: PORT,
     environment: config.nodeEnv,
     pythonSidecar: config.pythonSidecarUrl,
-    ollama: config.ollamaHost,
   });
 });
 
+let shuttingDown = false;
+
 function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+
   logger.info(`${signal} signal received: closing HTTP server`);
+  const forceExitTimer = setTimeout(() => {
+    logger.error("Forcing shutdown after timeout", { signal });
+    process.exit(1);
+  }, 10000);
+  forceExitTimer.unref?.();
+
   server.close(() => {
     logger.info("HTTP server closed");
+    clearTimeout(forceExitTimer);
     process.exit(0);
   });
 }
