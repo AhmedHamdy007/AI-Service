@@ -38,7 +38,7 @@ describe("face shape route", () => {
     jest.clearAllMocks();
   });
 
-  test("returns ConvNeXt face shape result with hairstyle recommendations", async () => {
+  test("returns CNN face shape result with hairstyle recommendations", async () => {
     analyzeFaceShape.mockResolvedValue({
       face_detected: true,
       shape: "Oval",

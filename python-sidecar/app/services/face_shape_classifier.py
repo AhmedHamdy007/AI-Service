@@ -111,10 +111,8 @@ def _resolve_preprocessor(tf: Any):
         return None
     if MODEL_PREPROCESSOR == "xception":
         return tf.keras.applications.xception.preprocess_input
-    if MODEL_PREPROCESSOR == "convnext":
-        return tf.keras.applications.convnext.preprocess_input
     raise FaceShapeModelError(
-        "FACE_SHAPE_MODEL_PREPROCESSOR must be one of: xception, convnext, raw"
+        "FACE_SHAPE_MODEL_PREPROCESSOR must be one of: xception, raw"
     )
 
 

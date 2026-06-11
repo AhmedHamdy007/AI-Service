@@ -44,7 +44,7 @@ router.post("/analyze", upload.single("file"), async (req, res) => {
       fileName: req.file?.originalname,
     });
 
-    // 1. Detect face shape via the ConvNeXt classifier in the Python sidecar.
+    // 1. Detect face shape via the CNN classifier in the Python sidecar.
     const faceResult = await analyzeFaceShape(req.file.buffer, req.file.mimetype);
 
     // 2. Build structured haircut cards from the shared local knowledge base.
